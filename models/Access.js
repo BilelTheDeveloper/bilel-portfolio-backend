@@ -16,12 +16,12 @@ const AccessSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// Hash password before saving to database
-AccessSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+// --- FIX: Modern Async Pre-save ---
+AccessSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
+  
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
-  next();
 });
 
 // Helper to check password during login
