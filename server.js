@@ -14,20 +14,32 @@ const app = express();
 
 // --- 3. Global Middleware ---
 
-// Standard JSON Parser (Increases limit for potentially large project descriptions)
 app.use(express.json({ limit: '10mb' }));
-
-// Secure Cookie Parser (Crucial for reading 'admin_token' in protected routes)
 app.use(cookieParser());
 
 /**
- * CORS Configuration
- * Fixed: Updated to match your .env variable (FRONTEND_URL) 
- * and set fallback to Vite's default port (5173).
+ * 🛠️ ULTRA SECURE CORS CONFIGURATION
+ * This setup detects if the request comes from your local computer 
+ * or your Vercel production site and allows it.
  */
+const allowedOrigins = [
+  "http://localhost:5173",          // Local Development
+  "https://bilelthedev.vercel.app", // Your Vercel URL
+  "https://bilel.dev"               // Your Custom Domain (if any)
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173", 
-  credentials: true, // Required to allow the browser to accept secure cookies
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps) 
+    // or if the origin is in our allowed list
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log(`⚠️ Blocked by CORS: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true, // MUST be true for the admin_token cookie to work
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -41,16 +53,10 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // --- 4. API Routes ---
-
-// Project Management (Handles Cloudinary via Multer middleware in routes)
 app.use('/api/projects', require('./routes/projectRoutes'));
-
-// Admin Auth (Handles Login, Status Check, and Logout)
 app.use('/api/auth', require('./routes/authRoutes'));
 
 // --- 5. Health Check & Error Handling ---
-
-// Base Health Check (Good for monitoring)
 app.use('/health', (req, res) => {
   res.status(200).json({ 
     status: 'Active', 
@@ -60,7 +66,6 @@ app.use('/health', (req, res) => {
   });
 });
 
-// 404 Catch-all for API (If no route matches)
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "API endpoint not found" });
 });
@@ -73,13 +78,11 @@ const server = app.listen(PORT, () => {
   🌍 ENVIRONMENT: ${process.env.NODE_ENV || 'development'}
   📡 PORT: ${PORT}
   🔗 API BASE: http://localhost:${PORT}/api
-  🔓 CORS ORIGIN: ${process.env.FRONTEND_URL || "http://localhost:5173"}
+  🔓 ACTIVE ORIGINS: ${allowedOrigins.join(', ')}
   `);
 });
 
-// Handle Unhandled Promise Rejections (Security & Crash Prevention)
 process.on('unhandledRejection', (err, promise) => {
   console.log(`❌ Critical Error: ${err.message}`);
-  // Close server & exit process
   server.close(() => process.exit(1));
 });
