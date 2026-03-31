@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const Access = require('../models/Access'); // Path to your Access model
+const Access = require('../models/Access');
 
 // @desc    Login Admin & Set Cookie
 // @route   POST /api/auth/login
@@ -10,7 +10,7 @@ exports.login = async (req, res) => {
     // 1. Find the admin in the Access table
     const admin = await Access.findOne({ email });
     
-    // 2. Check if admin exists AND password matches (using the helper in your model)
+    // 2. Check credentials
     if (!admin || !(await admin.comparePassword(password))) {
       return res.status(401).json({ 
         success: false, 
@@ -18,21 +18,24 @@ exports.login = async (req, res) => {
       });
     }
 
-    // 3. Create Token (using the admin ID and email)
+    // 3. Create Token
     const token = jwt.sign(
       { id: admin._id, email: admin.email }, 
       process.env.JWT_SECRET, 
       { expiresIn: '24h' }
     );
 
+    // 4. PRODUCTION-READY COOKIE OPTIONS
+    // We force secure: true and sameSite: 'none' so Vercel can talk to Render
     const cookieOptions = {
-      expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax'
+      secure: true,      // Must be true for HTTPS/Live sites
+      sameSite: 'none',  // Must be 'none' for cross-domain cookies
+      path: '/'          // Available across the whole site
     };
 
-    // 4. Send Cookie
+    // 5. Send Response
     res.status(200).cookie('admin_token', token, cookieOptions).json({
       success: true,
       message: "Welcome back, Bilel.",
@@ -46,12 +49,11 @@ exports.login = async (req, res) => {
   }
 };
 
-// @desc    Check Auth Status (Used by AdminGuard.jsx)
+// @desc    Check Auth Status (Used by ProtectedRoute.jsx)
 // @route   GET /api/auth/status
 exports.getStatus = async (req, res) => {
   try {
-    // req.user is attached by your 'protect' middleware
-    // We fetch fresh data from DB to ensure the email still exists
+    // req.user is attached by the 'protect' middleware
     const admin = await Access.findById(req.user.id).select('-password');
 
     if (!admin) {
@@ -66,6 +68,7 @@ exports.getStatus = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error("Status Error:", error);
     res.status(500).json({ success: false, message: "Status Check Failed" });
   }
 };
@@ -73,9 +76,14 @@ exports.getStatus = async (req, res) => {
 // @desc    Logout Admin & Clear Cookie
 // @route   GET /api/auth/logout
 exports.logout = async (req, res) => {
-  res.cookie('admin_token', 'none', {
-    expires: new Date(Date.now() + 5 * 1000),
+  // Clear the cookie by setting it to empty and expiring it immediately
+  res.cookie('admin_token', '', {
     httpOnly: true,
+    secure: true,
+    sameSite: 'none',
+    expires: new Date(0),
+    path: '/'
   });
+  
   res.status(200).json({ success: true, message: "Logged out successfully" });
 };
