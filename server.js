@@ -55,8 +55,11 @@ if (process.env.NODE_ENV === 'development') {
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
 
-// NEW: Feedback System Routes
+// Feedback System Routes
 app.use('/api/feedback', require('./routes/feedbackRoutes'));
+
+// NEW: Contact Inquiry System (Saves to DB + Sends Email)
+app.use('/api/messages', require('./routes/messageRoutes'));
 
 // --- 5. Health Check & Error Handling ---
 app.get('/health', (req, res) => {
