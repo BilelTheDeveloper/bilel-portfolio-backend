@@ -1,6 +1,36 @@
 const jwt = require('jsonwebtoken');
 const Access = require('../models/Access');
 
+// @desc    Check if email has permission to access login
+// @route   POST /api/auth/check-access
+exports.checkAccess = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required" });
+    }
+
+    // Find the admin in the Access table
+    const admin = await Access.findOne({ email: email.toLowerCase() });
+
+    if (!admin) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "Unauthorized: You do not have permission to access this area." 
+      });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Access granted. Please proceed to login." 
+    });
+  } catch (error) {
+    console.error("Access Check Error:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
 // @desc    Login Admin & Set Cookie
 // @route   POST /api/auth/login
 exports.login = async (req, res) => {
@@ -26,13 +56,12 @@ exports.login = async (req, res) => {
     );
 
     // 4. PRODUCTION-READY COOKIE OPTIONS
-    // We force secure: true and sameSite: 'none' so Vercel can talk to Render
     const cookieOptions = {
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
       httpOnly: true,
       secure: true,      // Must be true for HTTPS/Live sites
       sameSite: 'none',  // Must be 'none' for cross-domain cookies
-      path: '/'          // Available across the whole site
+      path: '/'          
     };
 
     // 5. Send Response
@@ -53,7 +82,6 @@ exports.login = async (req, res) => {
 // @route   GET /api/auth/status
 exports.getStatus = async (req, res) => {
   try {
-    // req.user is attached by the 'protect' middleware
     const admin = await Access.findById(req.user.id).select('-password');
 
     if (!admin) {
@@ -76,7 +104,6 @@ exports.getStatus = async (req, res) => {
 // @desc    Logout Admin & Clear Cookie
 // @route   GET /api/auth/logout
 exports.logout = async (req, res) => {
-  // Clear the cookie by setting it to empty and expiring it immediately
   res.cookie('admin_token', '', {
     httpOnly: true,
     secure: true,
