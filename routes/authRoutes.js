@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { login, getStatus, logout, checkAccess } = require('../controllers/authController');
+// ADD verifyGate to the destructuring below:
+const { login, getStatus, logout, checkAccess, verifyGate } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
+
+// --- 🛡️ NEW: Server-Side Gate Handshake ---
+// This verifies the "Monster Key" and drops the secure HttpOnly cookie
+router.post('/verify-gate', verifyGate);
 
 // 1. Pre-login access check (The "Gatekeeper")
 router.post('/check-access', checkAccess);

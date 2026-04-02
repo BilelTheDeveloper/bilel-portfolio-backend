@@ -114,3 +114,39 @@ exports.logout = async (req, res) => {
   
   res.status(200).json({ success: true, message: "Logged out successfully" });
 };
+
+// --- 🛡️ NEW GATE KEEPER ADDITION ---
+
+// @desc    Verify the Secret Gate Key & Set a temporary "Gate Cookie"
+// @route   POST /api/auth/verify-gate
+exports.verifyGate = async (req, res) => {
+  try {
+    const { key } = req.body;
+    
+    // We use the Master Key from your .env file
+    const MASTER_KEY = process.env.GATE_MASTER_KEY; 
+
+    if (!key || key !== MASTER_KEY) {
+      // We don't give the hacker any clues, just a generic 401
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    // This cookie is the "Pass" that allows the Login form to show up
+    const gateCookieOptions = {
+      expires: new Date(Date.now() + 30 * 60 * 1000), // Valid for 30 minutes
+      httpOnly: true, // 🔒 Cannot be seen by JavaScript/Console
+      secure: true,   
+      sameSite: 'none',
+      path: '/'
+    };
+
+    res.status(200).cookie('gate_pass', 'authorized', gateCookieOptions).json({
+      success: true,
+      message: "Gate Opened."
+    });
+
+  } catch (error) {
+    console.error("Gate Error:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
