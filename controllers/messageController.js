@@ -28,7 +28,7 @@ exports.sendMessage = async (req, res) => {
 
     // 3. Define the Email Content (Premium UI Style Integrated)
     sendSmtpEmail = {
-      sender: { name: "Bilel Portfolio Bot", email: "admin@bilel.dev" }, // Must be verified in Brevo
+      sender: { name: "Bilel Portfolio Bot", email: process.env.SENDER_EMAIL }, // Must be verified in Brevo
       to: [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }],
       replyTo: { email: email, name: name },
       subject: `📩 ${subject || 'New Portfolio Message'}`,
