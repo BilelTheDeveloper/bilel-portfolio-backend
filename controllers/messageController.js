@@ -2,7 +2,7 @@ const Message = require('../models/Message');
 const Brevo = require('@getbrevo/brevo');
 
 /**
- * @desc    Send a message from the contact form (via Brevo)
+ * @desc    Send a message from the contact form
  * @route   POST /api/messages
  * @access  Public
  */
@@ -10,7 +10,7 @@ exports.sendMessage = async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
 
-    // 1. Create the entry in MongoDB
+    // 1. Create the entry in MongoDB (Preserved exactly)
     const newMessage = await Message.create({
       name,
       email,
@@ -18,13 +18,13 @@ exports.sendMessage = async (req, res) => {
       message
     });
 
-    // 2. Setup Brevo Client (Corrected for @getbrevo/brevo)
+    // 2. Setup Brevo Client (Stable Constructor Pattern)
     const apiInstance = new Brevo.TransactionalEmailsApi();
     
-    // Set API Key directly on the instance
+    // Set API Key from your Render Environment Variables
     apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 
-    // 3. Define the Email Content
+    // 3. Define the Email Content (Premium UI Style)
     const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
     sendSmtpEmail.subject = `📩 ${subject || 'New Portfolio Message'}`;
@@ -52,8 +52,8 @@ exports.sendMessage = async (req, res) => {
           </div>
         </div>
       `;
-    
-    // Set Sender and Receiver from your Environment Variables
+
+    // Environment Variable mapping
     sendSmtpEmail.sender = { name: "Bilel Portfolio Bot", email: process.env.SENDER_EMAIL };
     sendSmtpEmail.to = [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }];
     sendSmtpEmail.replyTo = { email: email, name: name };
@@ -67,7 +67,7 @@ exports.sendMessage = async (req, res) => {
     });
 
   } catch (error) {
-    // Log detailed error for Render debugging
+    // Detailed error logging for Render troubleshooting
     console.error('Brevo API Error Details:', error.response?.body || error);
     res.status(500).json({
       success: false,
@@ -78,6 +78,8 @@ exports.sendMessage = async (req, res) => {
 
 /**
  * @desc    Get all messages (For Admin Dashboard)
+ * @route   GET /api/messages
+ * @access  Private (Admin Only)
  */
 exports.getMessages = async (req, res) => {
   try {
@@ -94,6 +96,8 @@ exports.getMessages = async (req, res) => {
 
 /**
  * @desc    Delete a message
+ * @route   DELETE /api/messages/:id
+ * @access  Private (Admin Only)
  */
 exports.deleteMessage = async (req, res) => {
   try {
