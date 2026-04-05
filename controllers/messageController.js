@@ -1,5 +1,5 @@
 const Message = require('../models/Message');
-const SibApiV3Sdk = require('@getbrevo/brevo');
+const Brevo = require('@getbrevo/brevo');
 
 /**
  * @desc    Send a message from the contact form (via Brevo)
@@ -10,7 +10,7 @@ exports.sendMessage = async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
 
-    // 1. Create the entry in MongoDB (Preserved Logic)
+    // 1. Create the entry in MongoDB
     const newMessage = await Message.create({
       name,
       email,
@@ -18,21 +18,17 @@ exports.sendMessage = async (req, res) => {
       message
     });
 
-    // 2. Setup Brevo Client
-    const defaultClient = SibApiV3Sdk.ApiClient.instance;
-    const apiKey = defaultClient.authentications['api-key'];
-    apiKey.apiKey = process.env.BREVO_API_KEY; // Using your secure .env key
+    // 2. Setup Brevo Client (Corrected for @getbrevo/brevo)
+    const apiInstance = new Brevo.TransactionalEmailsApi();
+    
+    // Set API Key directly on the instance
+    apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 
-    const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-    let sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+    // 3. Define the Email Content
+    const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
-    // 3. Define the Email Content (Premium UI Style Integrated)
-    sendSmtpEmail = {
-      sender: { name: "Bilel Portfolio Bot", email: process.env.SENDER_EMAIL }, // Must be verified in Brevo
-      to: [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }],
-      replyTo: { email: email, name: name },
-      subject: `📩 ${subject || 'New Portfolio Message'}`,
-      htmlContent: `
+    sendSmtpEmail.subject = `📩 ${subject || 'New Portfolio Message'}`;
+    sendSmtpEmail.htmlContent = `
         <div style="font-family: 'Helvetica', sans-serif; background-color: #0f172a; padding: 40px; color: #ffffff;">
           <div style="max-width: 600px; margin: 0 auto; background-color: #1e293b; border: 1px solid #334155; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
             <div style="background-color: #3b82f6; padding: 20px; text-align: center;">
@@ -55,18 +51,24 @@ exports.sendMessage = async (req, res) => {
             </div>
           </div>
         </div>
-      `
-    };
+      `;
+    
+    // Set Sender and Receiver from your Environment Variables
+    sendSmtpEmail.sender = { name: "Bilel Portfolio Bot", email: process.env.SENDER_EMAIL };
+    sendSmtpEmail.to = [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }];
+    sendSmtpEmail.replyTo = { email: email, name: name };
 
-    // 4. Fire the Email via Brevo Node
+    // 4. Fire the Email
     await apiInstance.sendTransacEmail(sendSmtpEmail);
 
     res.status(201).json({
       success: true,
       message: 'Message sent and saved successfully!'
     });
+
   } catch (error) {
-    console.error('Brevo/Message Error:', error.response?.body || error);
+    // Log detailed error for Render debugging
+    console.error('Brevo API Error Details:', error.response?.body || error);
     res.status(500).json({
       success: false,
       message: 'Server error: Message could not be sent.'
@@ -76,8 +78,6 @@ exports.sendMessage = async (req, res) => {
 
 /**
  * @desc    Get all messages (For Admin Dashboard)
- * @route   GET /api/messages
- * @access  Private (Admin Only)
  */
 exports.getMessages = async (req, res) => {
   try {
@@ -94,8 +94,6 @@ exports.getMessages = async (req, res) => {
 
 /**
  * @desc    Delete a message
- * @route   DELETE /api/messages/:id
- * @access  Private (Admin Only)
  */
 exports.deleteMessage = async (req, res) => {
   try {
