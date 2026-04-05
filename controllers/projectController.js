@@ -5,11 +5,22 @@ const Project = require('../models/Project');
 // @access  Private (Admin Only)
 exports.createProject = async (req, res) => {
   try {
-    // 1. Extract text fields from req.body
-    const { title, category, description, link, tags, longDescription, isFeatured } = req.body;
+    // 1. Extract text fields from req.body (Including NEW fields)
+    const { 
+      title, 
+      category, 
+      description, 
+      link, 
+      tags, 
+      longDescription, 
+      isFeatured,
+      features,    // NEW
+      challenges,  // NEW
+      solutions,   // NEW
+      duration     // NEW
+    } = req.body;
 
     // 2. Critical Check: Ensure the Middleware actually uploaded the image
-    // Multer-Cloudinary puts the secure URL in req.file.path
     if (!req.file) {
       return res.status(400).json({ 
         success: false, 
@@ -18,7 +29,6 @@ exports.createProject = async (req, res) => {
     }
 
     // 3. Data Formatting for Tags
-    // If tags come as a string "React, Node", we convert to ["React", "Node"]
     let projectTags = [];
     if (tags) {
       projectTags = Array.isArray(tags) 
@@ -26,16 +36,35 @@ exports.createProject = async (req, res) => {
         : tags.split(',').map(t => t.trim());
     }
 
-    // 4. Create the project in MongoDB
+    // 4. Data Formatting for Features (From JSON string back to Array)
+    let parsedFeatures = [];
+    if (features) {
+      try {
+        parsedFeatures = JSON.parse(features);
+      } catch (e) {
+        // Fallback if it's sent as a simple string
+        parsedFeatures = features.split(',').map(f => f.trim());
+      }
+    }
+
+    // 5. Create the project in MongoDB with ALL fields
     const project = await Project.create({
       title,
       category,
       description,
       longDescription: longDescription || "",
-      image: req.file.path, // Use the secure Cloudinary URL
+      image: req.file.path, // Secure Cloudinary URL
       link,
       tags: projectTags,
-      isFeatured: isFeatured === 'true' || isFeatured === true, // Handle FormData boolean
+      isFeatured: isFeatured === 'true' || isFeatured === true,
+      
+      // --- 🚀 SAVING NEW DETAILED FIELDS ---
+      features: parsedFeatures,
+      challenges: challenges || "",
+      solutions: solutions || "",
+      duration: duration || "",
+      // -------------------------------------
+      
       createdAt: Date.now()
     });
 
@@ -76,6 +105,33 @@ exports.getProjects = async (req, res) => {
   }
 };
 
+// @desc    Get single project by ID (CRITICAL for ProjectDetails page)
+// @route   GET /api/projects/:id
+// @access  Public
+exports.getProjectById = async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Project not found" 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: project
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching project details",
+      error: error.message
+    });
+  }
+};
+
 // @desc    Delete project
 // @route   DELETE /api/projects/:id
 // @access  Private (Admin Only)
@@ -87,7 +143,6 @@ exports.deleteProject = async (req, res) => {
       return res.status(404).json({ success: false, message: "Project not found" });
     }
 
-    // Note: In a future update, we can also delete the image from Cloudinary here
     await project.deleteOne();
     
     res.status(200).json({ 

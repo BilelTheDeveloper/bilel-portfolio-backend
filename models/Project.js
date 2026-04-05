@@ -21,6 +21,26 @@ const ProjectSchema = new mongoose.Schema({
     type: String,
     default: '' // Used for the "Learn More" modal detail
   },
+  
+  // --- 🚀 NEW DETAILED FIELDS ---
+  features: {
+    type: [String], // Array for bullet points like ["Real-time Chat", "Secure Auth"]
+    default: []
+  },
+  challenges: {
+    type: String,
+    default: ''
+  },
+  solutions: {
+    type: String,
+    default: ''
+  },
+  duration: {
+    type: String, // e.g., "3 Months" or "Dec 2025 - Feb 2026"
+    default: ''
+  },
+  // ------------------------------
+
   image: {
     type: String, // Store the Cloudinary URL here
     required: [true, 'Please upload an image mockup']

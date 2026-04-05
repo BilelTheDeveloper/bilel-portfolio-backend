@@ -1,27 +1,34 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
-const upload = require('../middleware/multer'); // You need this file!
+const upload = require('../middleware/multer'); // Cloudinary/Multer Middleware
+
 const { 
   createProject, 
   getProjects, 
+  getProjectById, // NEW: Added for individual case study pages
   deleteProject 
 } = require('../controllers/projectController');
 
-// --- Routes ---
-
-// Public: Everyone sees your portfolio
+// --- 1. PUBLIC ROUTES ---
+// Everyone sees your portfolio grid
 router.get('/', getProjects);
 
+// Everyone can view the details of a specific project
+// This matches the frontend call to CONFIG.ENDPOINTS.PROJECTS + /id
+router.get('/:id', getProjectById);
+
+
+// --- 2. PRIVATE ROUTES (Admin Only) ---
 /**
- * Private: Only YOU (with a token) can modify the data.
  * The order is CRITICAL:
- * 1. protect -> Checks if you are Bilel.
- * 2. upload.single('image') -> Takes the file, sends to Cloudinary, returns URL.
- * 3. createProject -> Saves that URL and text to MongoDB.
+ * 1. protect -> Verifies JWT Admin Token.
+ * 2. upload.single('image') -> Processes file to Cloudinary.
+ * 3. createProject -> Saves final data to MongoDB.
  */
 router.post('/', protect, upload.single('image'), createProject);
 
+// Only Bilel can remove a project
 router.delete('/:id', protect, deleteProject);
 
 module.exports = router;
