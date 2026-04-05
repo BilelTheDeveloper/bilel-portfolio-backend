@@ -10,7 +10,7 @@ exports.sendMessage = async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
 
-    // 1. Create the entry in MongoDB (Preserved exactly)
+    // 1. Create the entry in MongoDB (Preserved)
     const newMessage = await Message.create({
       name,
       email,
@@ -18,13 +18,13 @@ exports.sendMessage = async (req, res) => {
       message
     });
 
-    // 2. Setup Brevo Client (Stable Constructor Pattern)
+    // 2. Setup Brevo Client (Universal Compatible Import)
     const apiInstance = new Brevo.TransactionalEmailsApi();
     
-    // Set API Key from your Render Environment Variables
+    // Set the API Key
     apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 
-    // 3. Define the Email Content (Premium UI Style)
+    // 3. Define the Email Content (Premium UI)
     const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
     sendSmtpEmail.subject = `📩 ${subject || 'New Portfolio Message'}`;
@@ -53,12 +53,12 @@ exports.sendMessage = async (req, res) => {
         </div>
       `;
 
-    // Environment Variable mapping
+    // Map your environment variables
     sendSmtpEmail.sender = { name: "Bilel Portfolio Bot", email: process.env.SENDER_EMAIL };
     sendSmtpEmail.to = [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }];
     sendSmtpEmail.replyTo = { email: email, name: name };
 
-    // 4. Fire the Email
+    // 4. Fire the Email via the new SDK syntax
     await apiInstance.sendTransacEmail(sendSmtpEmail);
 
     res.status(201).json({
@@ -67,7 +67,7 @@ exports.sendMessage = async (req, res) => {
     });
 
   } catch (error) {
-    // Detailed error logging for Render troubleshooting
+    // If there is an error, this will tell us WHY in the Render logs
     console.error('Brevo API Error Details:', error.response?.body || error);
     res.status(500).json({
       success: false,
@@ -78,17 +78,11 @@ exports.sendMessage = async (req, res) => {
 
 /**
  * @desc    Get all messages (For Admin Dashboard)
- * @route   GET /api/messages
- * @access  Private (Admin Only)
  */
 exports.getMessages = async (req, res) => {
   try {
     const messages = await Message.find().sort({ createdAt: -1 });
-    res.status(200).json({
-      success: true,
-      count: messages.length,
-      data: messages
-    });
+    res.status(200).json({ success: true, count: messages.length, data: messages });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch messages' });
   }
@@ -96,14 +90,11 @@ exports.getMessages = async (req, res) => {
 
 /**
  * @desc    Delete a message
- * @route   DELETE /api/messages/:id
- * @access  Private (Admin Only)
  */
 exports.deleteMessage = async (req, res) => {
   try {
     const message = await Message.findByIdAndDelete(req.params.id);
     if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
-    
     res.status(200).json({ success: true, message: 'Message deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Delete failed' });
