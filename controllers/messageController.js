@@ -1,8 +1,9 @@
 const Message = require('../models/Message');
-const Brevo = require('@getbrevo/brevo');
+// --- NEW DESTRUCTURED IMPORT (The only way to fix "not a constructor") ---
+const { TransactionalEmailsApi, TransactionalEmailsApiApiKeys, SendSmtpEmail } = require('@getbrevo/brevo');
 
 /**
- * @desc    Send a message from the contact form (Integrated with Brevo v5)
+ * @desc    Send a message from the contact form
  * @route   POST /api/messages
  * @access  Public
  */
@@ -10,7 +11,7 @@ exports.sendMessage = async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
 
-    // 1. Create the entry in MongoDB (Preserved exactly)
+    // 1. Save to MongoDB (Your existing logic)
     await Message.create({
       name,
       email,
@@ -18,17 +19,14 @@ exports.sendMessage = async (req, res) => {
       message
     });
 
-    // 2. Setup Brevo Client (Optimized for @getbrevo/brevo 5.x)
-    const apiInstance = new Brevo.TransactionalEmailsApi();
+    // 2. Setup Brevo Client (Using the destructured classes)
+    const apiInstance = new TransactionalEmailsApi();
     
-    // Set API Key from your Render Environment Variables
-    apiInstance.setApiKey(
-      Brevo.TransactionalEmailsApiApiKeys.apiKey, 
-      process.env.BREVO_API_KEY
-    );
+    // Authenticate with your xkeysib-... key
+    apiInstance.setApiKey(TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
 
-    // 3. Define the Email Content (Your Premium UI Style)
-    const sendSmtpEmail = new Brevo.SendSmtpEmail();
+    // 3. Define the Email Content (Premium UI Style)
+    const sendSmtpEmail = new SendSmtpEmail();
 
     sendSmtpEmail.subject = `📩 ${subject || 'New Portfolio Message'}`;
     sendSmtpEmail.htmlContent = `
@@ -56,12 +54,11 @@ exports.sendMessage = async (req, res) => {
         </div>
       `;
 
-    // Set Dynamic Routing based on your Env Variables
     sendSmtpEmail.sender = { name: "Bilel Portfolio Bot", email: process.env.SENDER_EMAIL };
     sendSmtpEmail.to = [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }];
     sendSmtpEmail.replyTo = { email: email, name: name };
 
-    // 4. Fire the Email via Brevo API
+    // 4. Fire the Email
     await apiInstance.sendTransacEmail(sendSmtpEmail);
 
     res.status(201).json({
@@ -70,7 +67,7 @@ exports.sendMessage = async (req, res) => {
     });
 
   } catch (error) {
-    // Log detailed response from Brevo for debugging on Render
+    // Log detailed error for Render logs
     console.error('Brevo API Error:', error.response?.body || error);
     res.status(500).json({
       success: false,
@@ -81,17 +78,11 @@ exports.sendMessage = async (req, res) => {
 
 /**
  * @desc    Get all messages (For Admin Dashboard)
- * @route   GET /api/messages
- * @access  Private (Admin Only)
  */
 exports.getMessages = async (req, res) => {
   try {
     const messages = await Message.find().sort({ createdAt: -1 });
-    res.status(200).json({
-      success: true,
-      count: messages.length,
-      data: messages
-    });
+    res.status(200).json({ success: true, count: messages.length, data: messages });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch messages' });
   }
@@ -99,14 +90,11 @@ exports.getMessages = async (req, res) => {
 
 /**
  * @desc    Delete a message
- * @route   DELETE /api/messages/:id
- * @access  Private (Admin Only)
  */
 exports.deleteMessage = async (req, res) => {
   try {
     const message = await Message.findByIdAndDelete(req.params.id);
     if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
-    
     res.status(200).json({ success: true, message: 'Message deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Delete failed' });
