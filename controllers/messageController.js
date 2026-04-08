@@ -19,15 +19,15 @@ exports.sendMessage = async (req, res) => {
     });
 
     // 2. Setup Mailtrap Client
-    // We include testInboxId here so the SDK knows where to point the .testing methods
+    // CRITICAL: Version 4.x requires testInboxId HERE to enable the .testing methods
     const client = new MailtrapClient({ 
       token: process.env.MAILTRAP_TOKEN,
       testInboxId: 4527274,
       accountId: 2139626 
     });
 
-    // 3. Define the Email Content using your Premium UI
-    // We use hello@example.com for Sandbox to avoid verification errors
+    // 3. Fire the Email
+    // Using the exact syntax for your library version
     await client.testing.send({
       from: { name: "Bilel Portfolio Bot", email: "hello@example.com" },
       to: [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }],
@@ -56,7 +56,6 @@ exports.sendMessage = async (req, res) => {
           </div>
         </div>
       `,
-      category: "Integration Test"
     });
 
     res.status(201).json({
