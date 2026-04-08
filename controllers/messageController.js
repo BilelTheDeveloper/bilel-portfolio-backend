@@ -21,13 +21,14 @@ exports.sendMessage = async (req, res) => {
     // 2. Setup Mailtrap Client (Using Sandbox Config)
     const client = new MailtrapClient({ 
       token: process.env.MAILTRAP_TOKEN,
-      accountId: 4527274 // Your Sandbox ID
+      accountId: 2139626// Your Sandbox ID
     });
 
     // 3. Define the Email Content using your Premium UI
     // Note: client.testing.send is required for Sandbox mode
     await client.testing.send({
-      from: { name: "Bilel Portfolio Bot", email: "hello@example.com" },
+      testInboxId: 4527274,
+      from: { name: "Bilel Portfolio Bot", email: process.env.SENDER_EMAIL },
       to: [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }],
       subject: `📩 ${subject || 'New Portfolio Message'}`,
       html: `
