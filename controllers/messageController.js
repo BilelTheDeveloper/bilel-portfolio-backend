@@ -20,14 +20,14 @@ exports.sendMessage = async (req, res) => {
 
     // 2. Create Transporter using Mailtrap Sandbox credentials
     // Since you are in Sandbox, we use the standard SMTP settings
-    const transport = nodemailer.createTransport({
-      host: "sandbox.smtp.mailtrap.io",
-      port: 2525,
-      auth: {
-        user: "71e626e3828994", // Your Mailtrap User ID
-        pass: "53ab1a2d4449ec94"  // Your Mailtrap Password (from your token)
-      }
-    });
+    var transport = nodemailer.createTransport({
+    host: "sandbox.smtp.mailtrap.io",
+    port: 2525,
+    auth: {
+      user: "39e5e7abf883b7",
+      pass: "deee83febfe53a"
+    }
+});
 
     // 3. Define the Email Content
     const mailOptions = {
