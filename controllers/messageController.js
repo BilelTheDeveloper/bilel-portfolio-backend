@@ -1,5 +1,5 @@
 const Message = require('../models/Message');
-const nodemailer = require('nodemailer');
+const { MailtrapClient } = require("mailtrap");
 
 /**
  * @desc    Send a message from the contact form
@@ -18,20 +18,13 @@ exports.sendMessage = async (req, res) => {
       message
     });
 
-    // 2. Setup Nodemailer Transporter (Direct Gmail Tunnel)
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER, // bilel.thedeveloper@gmail.com
-        pass: process.env.EMAIL_PASS  // your 16-character App Password
-      }
-    });
+    // 2. Setup Mailtrap Client (Bypasses Render's SMTP block)
+    const client = new MailtrapClient({ token: process.env.MAILTRAP_TOKEN });
 
-    // 3. Define the Email Content (Keeping your Premium UI)
-    const mailOptions = {
-      from: `"${name}" <${process.env.EMAIL_USER}>`, // Sent via your Gmail
-      to: process.env.RECEIVER_EMAIL,
-      replyTo: email, // So when you click reply, it goes to the sender
+    // 3. Fire the Email using your Premium UI
+    await client.send({
+      from: { name: "Bilel Portfolio Bot", email: process.env.SENDER_EMAIL },
+      to: [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }],
       subject: `📩 ${subject || 'New Portfolio Message'}`,
       html: `
         <div style="font-family: 'Helvetica', sans-serif; background-color: #0f172a; padding: 40px; color: #ffffff;">
@@ -52,15 +45,12 @@ exports.sendMessage = async (req, res) => {
             </div>
             <div style="text-align: center; padding: 20px; border-top: 1px solid #334155; background-color: #1e293b;">
               <p style="color: #64748b; font-size: 10px; margin: 0;">This inquiry was sent from your bilel.dev contact form.</p>
-              <p style="color: #3b82f6; font-size: 8px; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">Powered by BILEL.ADMIN & Nodemailer</p>
+              <p style="color: #3b82f6; font-size: 8px; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">Powered by BILEL.ADMIN & Mailtrap API</p>
             </div>
           </div>
         </div>
-      `
-    };
-
-    // 4. Fire the Email
-    await transporter.sendMail(mailOptions);
+      `,
+    });
 
     res.status(201).json({
       success: true,
@@ -68,7 +58,8 @@ exports.sendMessage = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Nodemailer Error:', error);
+    // Log detailed error for Render logs
+    console.error('Mailtrap API Error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error: Message could not be sent.'
