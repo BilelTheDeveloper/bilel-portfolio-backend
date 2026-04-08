@@ -1,5 +1,5 @@
 const Message = require('../models/Message');
-const { MailtrapClient } = require("mailtrap");
+const nodemailer = require('nodemailer'); // Use the nodemailer you already have
 
 /**
  * @desc    Send a message from the contact form
@@ -18,19 +18,21 @@ exports.sendMessage = async (req, res) => {
       message
     });
 
-    // 2. Setup Mailtrap Client
-    // CRITICAL: Version 4.x requires testInboxId HERE to enable the .testing methods
-    const client = new MailtrapClient({ 
-      token: process.env.MAILTRAP_TOKEN,
-      testInboxId: 4527274,
-      accountId: 2139626 
+    // 2. Create Transporter using Mailtrap Sandbox credentials
+    // Since you are in Sandbox, we use the standard SMTP settings
+    const transport = nodemailer.createTransport({
+      host: "sandbox.smtp.mailtrap.io",
+      port: 2525,
+      auth: {
+        user: "71e626e3828994", // Your Mailtrap User ID
+        pass: "53ab1a2d4449ec94"  // Your Mailtrap Password (from your token)
+      }
     });
 
-    // 3. Fire the Email
-    // Using the exact syntax for your library version
-    await client.testing.send({
-      from: { name: "Bilel Portfolio Bot", email: "hello@example.com" },
-      to: [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }],
+    // 3. Define the Email Content
+    const mailOptions = {
+      from: '"Bilel Portfolio Bot" <hello@example.com>',
+      to: process.env.RECEIVER_EMAIL,
       subject: `📩 ${subject || 'New Portfolio Message'}`,
       html: `
         <div style="font-family: 'Helvetica', sans-serif; background-color: #0f172a; padding: 40px; color: #ffffff;">
@@ -55,8 +57,11 @@ exports.sendMessage = async (req, res) => {
             </div>
           </div>
         </div>
-      `,
-    });
+      `
+    };
+
+    // 4. Send the email
+    await transport.sendMail(mailOptions);
 
     res.status(201).json({
       success: true,
@@ -64,7 +69,7 @@ exports.sendMessage = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Mailtrap Sandbox Error:', error);
+    console.error('Mailtrap Error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error: Message could not be sent.'
@@ -72,9 +77,7 @@ exports.sendMessage = async (req, res) => {
   }
 };
 
-/**
- * @desc    Get all messages (For Admin Dashboard)
- */
+// ... keep getMessages and deleteMessage the same as before
 exports.getMessages = async (req, res) => {
   try {
     const messages = await Message.find().sort({ createdAt: -1 });
