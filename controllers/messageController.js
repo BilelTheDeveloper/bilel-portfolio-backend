@@ -18,12 +18,16 @@ exports.sendMessage = async (req, res) => {
       message
     });
 
-    // 2. Setup Mailtrap Client (Bypasses Render's SMTP block)
-    const client = new MailtrapClient({ token: process.env.MAILTRAP_TOKEN });
+    // 2. Setup Mailtrap Client (Using Sandbox Config)
+    const client = new MailtrapClient({ 
+      token: process.env.MAILTRAP_TOKEN,
+      testInboxId: 4527274 // Your Sandbox ID
+    });
 
-    // 3. Fire the Email using your Premium UI
-    await client.send({
-      from: { name: "Bilel Portfolio Bot", email: process.env.SENDER_EMAIL },
+    // 3. Define the Email Content using your Premium UI
+    // Note: client.testing.send is required for Sandbox mode
+    await client.testing.send({
+      from: { name: "Bilel Portfolio Bot", email: "hello@example.com" },
       to: [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }],
       subject: `📩 ${subject || 'New Portfolio Message'}`,
       html: `
@@ -45,21 +49,21 @@ exports.sendMessage = async (req, res) => {
             </div>
             <div style="text-align: center; padding: 20px; border-top: 1px solid #334155; background-color: #1e293b;">
               <p style="color: #64748b; font-size: 10px; margin: 0;">This inquiry was sent from your bilel.dev contact form.</p>
-              <p style="color: #3b82f6; font-size: 8px; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">Powered by BILEL.ADMIN & Mailtrap API</p>
+              <p style="color: #3b82f6; font-size: 8px; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">Powered by BILEL.ADMIN & Mailtrap Sandbox</p>
             </div>
           </div>
         </div>
       `,
+      category: "Integration Test"
     });
 
     res.status(201).json({
       success: true,
-      message: 'Message sent and saved successfully!'
+      message: 'Message sent to Sandbox and saved successfully!'
     });
 
   } catch (error) {
-    // Log detailed error for Render logs
-    console.error('Mailtrap API Error:', error);
+    console.error('Mailtrap Sandbox Error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error: Message could not be sent.'
