@@ -1,6 +1,5 @@
 const Message = require('../models/Message');
-// --- NEW DESTRUCTURED IMPORT (The only way to fix "not a constructor") ---
-const { TransactionalEmailsApi, TransactionalEmailsApiApiKeys, SendSmtpEmail } = require('@getbrevo/brevo');
+const nodemailer = require('nodemailer');
 
 /**
  * @desc    Send a message from the contact form
@@ -11,7 +10,7 @@ exports.sendMessage = async (req, res) => {
   try {
     const { name, email, subject, message } = req.body;
 
-    // 1. Save to MongoDB (Your existing logic)
+    // 1. Save to MongoDB
     await Message.create({
       name,
       email,
@@ -19,17 +18,22 @@ exports.sendMessage = async (req, res) => {
       message
     });
 
-    // 2. Setup Brevo Client (Using the destructured classes)
-    const apiInstance = new TransactionalEmailsApi();
-    
-    // Authenticate with your xkeysib-... key
-    apiInstance.setApiKey(TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
+    // 2. Setup Nodemailer Transporter (Direct Gmail Tunnel)
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER, // bilel.thedeveloper@gmail.com
+        pass: process.env.EMAIL_PASS  // your 16-character App Password
+      }
+    });
 
-    // 3. Define the Email Content (Premium UI Style)
-    const sendSmtpEmail = new SendSmtpEmail();
-
-    sendSmtpEmail.subject = `📩 ${subject || 'New Portfolio Message'}`;
-    sendSmtpEmail.htmlContent = `
+    // 3. Define the Email Content (Keeping your Premium UI)
+    const mailOptions = {
+      from: `"${name}" <${process.env.EMAIL_USER}>`, // Sent via your Gmail
+      to: process.env.RECEIVER_EMAIL,
+      replyTo: email, // So when you click reply, it goes to the sender
+      subject: `📩 ${subject || 'New Portfolio Message'}`,
+      html: `
         <div style="font-family: 'Helvetica', sans-serif; background-color: #0f172a; padding: 40px; color: #ffffff;">
           <div style="max-width: 600px; margin: 0 auto; background-color: #1e293b; border: 1px solid #334155; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
             <div style="background-color: #3b82f6; padding: 20px; text-align: center;">
@@ -48,18 +52,15 @@ exports.sendMessage = async (req, res) => {
             </div>
             <div style="text-align: center; padding: 20px; border-top: 1px solid #334155; background-color: #1e293b;">
               <p style="color: #64748b; font-size: 10px; margin: 0;">This inquiry was sent from your bilel.dev contact form.</p>
-              <p style="color: #3b82f6; font-size: 8px; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">Powered by BILEL.ADMIN & Brevo</p>
+              <p style="color: #3b82f6; font-size: 8px; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">Powered by BILEL.ADMIN & Nodemailer</p>
             </div>
           </div>
         </div>
-      `;
-
-    sendSmtpEmail.sender = { name: "Bilel Portfolio Bot", email: process.env.SENDER_EMAIL };
-    sendSmtpEmail.to = [{ email: process.env.RECEIVER_EMAIL, name: "Bilel Admin" }];
-    sendSmtpEmail.replyTo = { email: email, name: name };
+      `
+    };
 
     // 4. Fire the Email
-    await apiInstance.sendTransacEmail(sendSmtpEmail);
+    await transporter.sendMail(mailOptions);
 
     res.status(201).json({
       success: true,
@@ -67,8 +68,7 @@ exports.sendMessage = async (req, res) => {
     });
 
   } catch (error) {
-    // Log detailed error for Render logs
-    console.error('Brevo API Error:', error.response?.body || error);
+    console.error('Nodemailer Error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error: Message could not be sent.'
