@@ -21,7 +21,7 @@ exports.sendMessage = async (req, res) => {
     // 2. Setup Mailtrap Client (Using Sandbox Config)
     const client = new MailtrapClient({ 
       token: process.env.MAILTRAP_TOKEN,
-      testInboxId: 4527274 // Your Sandbox ID
+      accountId: 4527274 // Your Sandbox ID
     });
 
     // 3. Define the Email Content using your Premium UI
