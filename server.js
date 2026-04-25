@@ -2,6 +2,8 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const https = require('https');
+const http = require('http');
 const connectDB = require('./config/db');
 
 // --- 1. Load Environment Variables ---
@@ -13,23 +15,20 @@ connectDB();
 const app = express();
 
 // --- 3. Global Middleware ---
-// Increased limit to 10mb to handle project image uploads if needed
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
 /**
- * 🛠️ ULTRA SECURE CORS CONFIGURATION
- * Optimized for Vercel (Frontend) and Render (Backend) communication.
+ * CORS CONFIGURATION
  */
 const allowedOrigins = [
-  "http://localhost:5173",           // Local Development
-  "https://bilelthedev.vercel.app",  // Your Vercel Production URL
-  "https://bilel.dev"                // Your Custom Domain
+  "http://localhost:5173",
+  "https://bilelthedev.vercel.app",
+  "https://bilel.dev"
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like Postman/Mobile) or if in allowed list
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -37,12 +36,12 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true, // CRITICAL: Must be true for the admin_token cookie to work
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Professional Request Logger (Only in Dev Mode)
+// Request Logger (Dev only)
 if (process.env.NODE_ENV === 'development') {
   app.use((req, res, next) => {
     console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
@@ -51,20 +50,15 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // --- 4. API Routes ---
-// Existing Routes
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
-
-// Feedback System Routes
 app.use('/api/feedback', require('./routes/feedbackRoutes'));
-
-// NEW: Contact Inquiry System (Saves to DB + Sends Email)
 app.use('/api/messages', require('./routes/messageRoutes'));
 
 // --- 5. Health Check & Error Handling ---
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'Active', 
+  res.status(200).json({
+    status: 'Active',
     timestamp: new Date(),
     service: 'Bilel.dev Portfolio API',
     database: 'Connected',
@@ -87,11 +81,62 @@ const server = app.listen(PORT, () => {
   🔗 API BASE: http://localhost:${PORT}/api
   🔓 ACTIVE ORIGINS: ${allowedOrigins.join(', ')}
   `);
+
+  // Start keep-alive pinger after server is ready
+  startKeepAlive();
 });
 
-// Handle Unhandled Promise Rejections (e.g., DB connection loss)
-process.on('unhandledRejection', (err, promise) => {
+// --- 7. KEEP-ALIVE PINGER ---
+// Render free plan shuts down after ~15 minutes of inactivity.
+// This pings our own /health endpoint every 10 minutes to keep it awake.
+function startKeepAlive() {
+  // Only run in production (no need to ping in local dev)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('  ⏸️  Keep-alive disabled in development mode.');
+    return;
+  }
+
+  // Get the server URL from env, fallback to a constructed one
+  const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  const PING_INTERVAL_MS = 10 * 60 * 1000; // every 10 minutes
+
+  const ping = () => {
+    const url = `${SELF_URL}/health`;
+    const lib = url.startsWith('https') ? https : http;
+
+    const req = lib.get(url, (res) => {
+      if (res.statusCode === 200) {
+        console.log(`  💓 Keep-alive ping OK — [${new Date().toLocaleTimeString()}]`);
+      } else {
+        console.warn(`  ⚠️  Keep-alive ping got status ${res.statusCode}`);
+      }
+      // Drain the response to free memory
+      res.resume();
+    });
+
+    req.on('error', (err) => {
+      console.warn(`  ⚠️  Keep-alive ping failed: ${err.message}`);
+    });
+
+    // Safety timeout so the request never hangs
+    req.setTimeout(10000, () => {
+      req.destroy();
+      console.warn('  ⚠️  Keep-alive ping timed out.');
+    });
+  };
+
+  // First ping after 1 minute (let server fully stabilise first)
+  setTimeout(() => {
+    ping();
+    // Then ping every 10 minutes
+    setInterval(ping, PING_INTERVAL_MS);
+  }, 60 * 1000);
+
+  console.log(`  💓 Keep-alive active — pinging ${SELF_URL}/health every 10 min`);
+}
+
+// --- 8. Handle Unhandled Promise Rejections ---
+process.on('unhandledRejection', (err) => {
   console.log(`❌ Critical Error: ${err.message}`);
-  // Close server & exit process
   server.close(() => process.exit(1));
 });
