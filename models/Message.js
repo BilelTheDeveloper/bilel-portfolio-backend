@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
+const { SERVICES, BUDGETS, TIMELINES } = require('../services/inquiryFields');
 
 const messageSchema = new mongoose.Schema({
+  company: { type: String, trim: true, maxlength: 120, default: '' },
+  service: { type: String, enum: ['', ...SERVICES], default: '' },
+  budget: { type: String, enum: ['', ...BUDGETS], default: '' },
+  timeline: { type: String, enum: ['', ...TIMELINES], default: '' },
+  status: { type: String, enum: ['new', 'reviewing', 'contacted', 'archived'], default: 'new' },
   idempotencyKey: { type: String, unique: true, sparse: true },
   notificationStatus: { type: String, enum: ['pending', 'sending', 'sent', 'failed'], default: 'pending' },
   notificationAttempts: { type: Number, default: 0 },
@@ -9,11 +15,11 @@ const messageSchema = new mongoose.Schema({
   name: {
     type: String,
     required: [true, 'Please add a name'],
-    trim: true
+    trim: true, maxlength: 100
   },
   email: {
     type: String,
-    required: [true, 'Please add an email'],
+    required: [true, 'Please add an email'], maxlength: 254,
     match: [
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
       'Please add a valid email'
@@ -21,7 +27,7 @@ const messageSchema = new mongoose.Schema({
   },
   subject: {
     type: String,
-    default: 'New Inquiry from Bilel.dev'
+    default: 'New Inquiry from Bilel.dev', maxlength: 150
   },
   message: {
     type: String,

@@ -318,3 +318,26 @@ test('multipart project creation, replacement, validation and deletion match pub
     assert.equal((await fetch(base+'/api/projects/'+project._id,{method:'DELETE',headers})).status,200);assert.equal(await Project.findById(project._id),null);assert.equal((await fetch(base+'/api/projects/'+project._id)).status,404);
   } finally {cloudinary.uploader.upload_stream=originalUpload;cloudinary.uploader.destroy=originalDestroy;await Project.deleteMany({});}
 });
+
+test('structured inquiries persist without email and admin status updates stay private', async()=>{
+  const Message=require('../models/Message');
+  await Message.init();
+  const body={name:' Client ',email:'CLIENT@example.com',subject:'Booking website',message:'I would like a booking website for my business.',company:'Example Studio',service:'Web application',budget:'$1,000–$3,000',timeline:'Within a month',status:'archived'};
+  const key='inquiry-integration-receipt-2026';
+  const send=data=>fetch(base+'/api/messages',{method:'POST',headers:{Origin:'http://localhost:5173','Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify(data)});
+  try{
+    const created=await send(body);assert.equal(created.status,201);const receipt=await created.json();assert.match(receipt.reference,/^[A-F0-9]{8}$/);
+    const saved=await Message.findOne({idempotencyKey:key});assert.equal(saved.name,'Client');assert.equal(saved.email,'client@example.com');assert.equal(saved.company,body.company);assert.equal(saved.budget,body.budget);assert.equal(saved.timeline,body.timeline);assert.equal(saved.status,'new');
+    assert.equal((await send(body)).status,201);assert.equal(await Message.countDocuments({idempotencyKey:key}),1);
+    assert.equal((await send({...body,budget:'$5,000+'})).status,409);
+    const invalid=await send({...body,service:{$ne:null}});assert.equal(invalid.status,400);
+    assert.equal((await fetch(base+'/api/messages')).status,401);
+    const patch=(headers,status)=>fetch(base+'/api/messages/'+saved._id,{method:'PATCH',headers:{Origin:'http://localhost:5173','Content-Type':'application/json',...headers},body:JSON.stringify({status,email:'intruder@example.com'})});
+    assert.equal((await patch({},'contacted')).status,401);
+    const {browser}=await enroll();const auth=await browser.send('/status');const headers={Cookie:[...browser.cookies].map(([k,v])=>k+'='+v).join('; '),'X-Admin-CSRF':auth.data.csrfToken};
+    assert.equal((await patch({Cookie:headers.Cookie},'contacted')).status,403);
+    const list=await(await fetch(base+'/api/messages',{headers})).json();const inbox=list.data.find(item=>item._id===String(saved._id));assert.equal(inbox.subject,body.subject);assert.equal(inbox.idempotencyKey,undefined);
+    assert.equal((await patch(headers,'contacted')).status,200);const updated=await Message.findById(saved._id);assert.equal(updated.status,'contacted');assert.equal(updated.email,'client@example.com');
+    assert.equal((await patch(headers,'invalid')).status,400);
+  }finally{await Message.deleteMany({idempotencyKey:key});}
+});

@@ -8,6 +8,7 @@ router.param('id', (req, res, next, id) => { req.params.id = id; validId(req, re
 const {
   sendMessage,
   getMessages,
+  updateMessage,
   deleteMessage
 } = require('../controllers/messageController');
 
@@ -34,6 +35,7 @@ router.get('/', protect, getMessages);
  * @desc    Remove a message from the database
  * @access  Private (Admin Only)
  */
+router.patch('/:id', protect, updateMessage);
 router.delete('/:id', protect, deleteMessage);
 
 module.exports = router;
