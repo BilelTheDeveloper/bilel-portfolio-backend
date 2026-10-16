@@ -1,70 +1,23 @@
 const mongoose = require('mongoose');
-
+const { CATEGORIES } = require('../services/projectFields');
+const limitedList = (count, max) => ({ validator: items => items.length <= count && items.every(item => item.trim().length > 0 && item.length <= max), message: 'Invalid list length or item length.' });
 const ProjectSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: [true, 'Please add a project title'],
-    trim: true,
-    maxlength: [100, 'Title cannot be more than 100 characters']
-  },
-  category: {
-    type: String,
-    required: [true, 'Please select a category'],
-    enum: ['Web Development', 'Meta Ads Case Study', 'UI/UX Design', 'Digital Marketing']
-  },
-  description: {
-    type: String,
-    required: [true, 'Please add a description'],
-    maxlength: [500, 'Description cannot be more than 500 characters']
-  },
-  longDescription: {
-    type: String,
-    default: '' // Used for the "Learn More" modal detail
-  },
-
-  // --- 🚀 NEW DETAILED FIELDS ---
-  features: {
-    type: [String], // Array for bullet points like ["Real-time Chat", "Secure Auth"]
-    default: []
-  },
-  challenges: {
-    type: String,
-    default: ''
-  },
-  solutions: {
-    type: String,
-    default: ''
-  },
-  duration: {
-    type: String, // e.g., "3 Months" or "Dec 2025 - Feb 2026"
-    default: ''
-  },
-  // ------------------------------
-
+  title: { type: String, required: true, trim: true, maxlength: 100 },
+  category: { type: String, required: true, enum: CATEGORIES },
+  description: { type: String, required: true, trim: true, maxlength: 500 },
+  cardLabel: { type: String, trim: true, maxlength: 40, default: '' },
+  imageAlt: { type: String, trim: true, maxlength: 160, default: '' },
+  imagePosition: { type: String, enum: ['top', 'center', 'bottom'], default: 'center' },
+  longDescription: { type: String, maxlength: 10000, default: '' },
+  features: { type: [String], default: [], validate: limitedList(30, 200) },
+  challenges: { type: String, maxlength: 10000, default: '' },
+  solutions: { type: String, maxlength: 10000, default: '' },
+  duration: { type: String, maxlength: 100, default: '' },
   imagePublicId: { type: String, select: false },
-  image: {
-    type: String, // Store the Cloudinary URL here
-    required: [true, 'Please upload an image mockup']
-  },
-  link: {
-    type: String,
-    match: [
-      /^(https?):\/\/[^\s/$.?#].[^\s]*$/i,
-      'Please use a valid URL with HTTP or HTTPS'
-    ]
-  },
-  tags: {
-    type: [String], // Array of strings like ["React", "Node.js", "Tailwind"]
-    default: []
-  },
-  isFeatured: {
-    type: Boolean,
-    default: false // Use this to pin important projects to the top
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
-
+  image: { type: String, required: true },
+  link: { type: String, default: '', validate: { validator: value => { if (!value) return true; try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && Boolean(url.hostname) && !url.username && !url.password; } catch { return false; } }, message: 'Use a complete HTTP or HTTPS URL.' } },
+  tags: { type: [String], default: [], validate: limitedList(12, 30) },
+  isFeatured: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now },
+}, { timestamps: { createdAt: false, updatedAt: true } });
 module.exports = mongoose.model('Project', ProjectSchema);

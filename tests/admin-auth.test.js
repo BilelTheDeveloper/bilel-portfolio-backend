@@ -290,3 +290,31 @@ test('project editing requires a verified session and CSRF and preserves protect
     assert.equal((await send(headers)).status, 401);
   } finally { await Project.deleteMany({}); }
 });
+
+test('multipart project creation, replacement, validation and deletion match public cards', async () => {
+  const Project = require('../models/Project');
+  const cloudinary = require('cloudinary').v2;
+  const { Writable } = require('node:stream');
+  const originalUpload=cloudinary.uploader.upload_stream, originalDestroy=cloudinary.uploader.destroy;
+  let uploads=0; const destroyed=[];
+  cloudinary.uploader.upload_stream=(options,callback)=>{const id='test-cover-'+(++uploads);return new Writable({write(chunk,encoding,done){done();},final(done){callback(null,{secure_url:'https://example.com/'+id+'.png',public_id:id,bytes:68});done();}});};
+  cloudinary.uploader.destroy=async (id, options, callback)=>{destroyed.push(id);callback?.(null,{result:'ok'});return {result:'ok'};};
+  try {
+    const {browser}=await enroll(); const status=await browser.send('/status');
+    const headers={Origin:'http://localhost:5173',Cookie:[...browser.cookies].map(([k,v])=>k+'='+v).join('; '),'X-Admin-CSRF':status.data.csrfToken};
+    const defaults={title:' Booking Platform ',category:'Web Development',cardLabel:'SaaS Booking',description:'Book appointments.',tags:'React, Node.js, React',features:JSON.stringify(['Accessible booking']),isFeatured:'true',link:'',imageAlt:'Booking dashboard',imagePosition:'top'};
+    const send=(path='',fields={},file=true,type='image/png',bytes=Buffer.from('test-image'))=>{const body=new FormData();for(const [key,value] of Object.entries({...defaults,...fields}))body.append(key,value);if(file)body.append('image',new Blob([bytes],{type}),'cover.png');return fetch(base+'/api/projects'+path,{method:path?'PUT':'POST',headers,body});};
+    const missing=await send('',{},false);assert.equal(missing.status,400);assert.ok((await missing.json()).errors.image);
+    const invalid=await send('',{title:' ',tags:'x'.repeat(31),link:'javascript:alert(1)'});assert.equal(invalid.status,400);const problems=(await invalid.json()).errors;assert.ok(problems.title&&problems.tags&&problems.link);assert.ok(destroyed.includes('test-cover-1'));
+    const created=await send();assert.equal(created.status,201);const project=(await created.json()).data;
+    assert.equal(project.title,'Booking Platform');assert.equal(project.cardLabel,'SaaS Booking');assert.equal(project.imagePosition,'top');assert.equal(project.imageAlt,'Booking dashboard');assert.equal(project.link,'');assert.equal(project.isFeatured,true);assert.deepEqual(project.tags,['React','Node.js']);assert.equal(project.imagePublicId,undefined);
+    const single=await(await fetch(base+'/api/projects/'+project._id)).json();assert.equal(single.data.cardLabel,'SaaS Booking');
+    const edited=await send('/'+project._id,{title:'Updated Booking',isFeatured:'false',imagePosition:'bottom'},false);assert.equal(edited.status,200);const result=(await edited.json()).data;assert.equal(result.image,project.image);assert.equal(result.isFeatured,false);assert.equal(result.imagePosition,'bottom');
+    assert.equal((await send('/'+project._id,{},true,'text/plain')).status,400);
+    assert.equal((await send('/'+project._id,{},true,'image/png',Buffer.alloc(5*1024*1024+1))).status,413);
+    assert.equal((await Project.findById(project._id)).title,'Updated Booking');
+    const replacement=await send('/'+project._id,{cardLabel:'Booking SaaS'});assert.equal(replacement.status,200);assert.ok(destroyed.includes('test-cover-2'));assert.notEqual((await replacement.json()).data.image,project.image);
+    const list=await(await fetch(base+'/api/projects')).json();assert.ok(list.data.some(p=>p._id===project._id&&p.cardLabel==='Booking SaaS'));assert.equal(list.data.some(p=>p.imagePublicId),false);
+    assert.equal((await fetch(base+'/api/projects/'+project._id,{method:'DELETE',headers})).status,200);assert.equal(await Project.findById(project._id),null);assert.equal((await fetch(base+'/api/projects/'+project._id)).status,404);
+  } finally {cloudinary.uploader.upload_stream=originalUpload;cloudinary.uploader.destroy=originalDestroy;await Project.deleteMany({});}
+});

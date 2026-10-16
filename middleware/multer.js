@@ -19,6 +19,6 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 20 }, fileFilter: (req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) });
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 20 }, fileFilter: (req, file, cb) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('Choose a JPG, PNG or WebP image.'), { code: 'INVALID_IMAGE' })) });
 
 module.exports = upload;

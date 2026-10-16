@@ -28,8 +28,15 @@ router.get('/:id', getProjectById);
  * 2. upload.single('image') -> Processes file to Cloudinary.
  * 3. createProject -> Saves final data to MongoDB.
  */
-router.post('/', protect, upload.single('image'), createProject);
-router.put('/:id', protect, upload.single('image'), createProject);
+const coverUpload = (req, res, next) => upload.single('image')(req, res, error => {
+  if (!error) return next();
+  const tooLarge = error.code === 'LIMIT_FILE_SIZE';
+  const invalid = error.code === 'INVALID_IMAGE' || error.name === 'MulterError';
+  const message = tooLarge ? 'Choose an image smaller than 5 MB.' : invalid ? 'Choose one JPG, PNG or WebP image up to 5 MB.' : 'Image upload failed. Please try again.';
+  return res.status(tooLarge ? 413 : invalid ? 400 : 502).json({ success: false, message, errors: { image: message } });
+});
+router.post('/', protect, coverUpload, createProject);
+router.put('/:id', protect, coverUpload, createProject);
 
 // Only Bilel can remove a project
 router.delete('/:id', protect, deleteProject);
