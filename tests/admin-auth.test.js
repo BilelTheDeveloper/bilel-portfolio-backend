@@ -259,3 +259,34 @@ test('operator migration refuses a legacy password and approves only after a fre
   assert.equal(await updated.comparePassword(password), false);
   assert.equal(await updated.comparePassword(fresh), true);
 });
+
+
+test('project editing requires a verified session and CSRF and preserves protected fields', async () => {
+  const Project = require('../models/Project');
+  const project = await Project.create({ title: 'Original case study', category: 'Web Development', description: 'Original', image: 'https://example.com/cover.png', imagePublicId: 'private-cover-id', link: 'https://example.com' });
+  try {
+    const url = base + '/api/projects/' + project._id;
+    const fields = { title: 'Updated case study', category: 'UI/UX Design', description: 'New description', link: 'https://example.com/new', features: JSON.stringify(['Accessible navigation']), tags: 'React, Design', isFeatured: 'true', image: 'https://evil.example/cover.png', imagePublicId: 'attacker-id', createdAt: '2000-01-01' };
+    const send = headers => fetch(url, { method: 'PUT', headers: { Origin: 'http://localhost:5173', 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(fields) });
+    assert.equal((await send({})).status, 401);
+    const { browser } = await enroll();
+    const cookie = [...browser.cookies].map(([key, value]) => key + '=' + value).join('; ');
+    assert.equal((await send({ Cookie: cookie })).status, 403);
+    const status = await browser.send('/status');
+    const headers = { Cookie: cookie, 'X-Admin-CSRF': status.data.csrfToken };
+    const response = await send(headers);
+    assert.equal(response.status, 200);
+    const result = (await response.json()).data;
+    assert.equal(result.title, fields.title);
+    assert.equal(result.image, project.image);
+    assert.equal(result.imagePublicId, undefined);
+    assert.equal(result.isFeatured, true);
+    assert.deepEqual(result.features, ['Accessible navigation']);
+    assert.equal(new Date(result.createdAt).getTime(), project.createdAt.getTime());
+    fields.title = '';
+    assert.equal((await send(headers)).status, 400);
+    assert.equal((await Project.findById(project._id)).title, 'Updated case study');
+    await Access.updateOne({ _id: user._id }, { isActive: false });
+    assert.equal((await send(headers)).status, 401);
+  } finally { await Project.deleteMany({}); }
+});

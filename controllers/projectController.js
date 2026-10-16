@@ -5,7 +5,13 @@ const cloudinary = require('cloudinary').v2;
 // @route   POST /api/projects
 // @access  Private (Admin Only)
 exports.createProject = async (req, res) => {
+  let saved = false;
   try {
+    const existing = req.params.id ? await Project.findById(req.params.id).select('+imagePublicId') : null;
+    if (req.params.id && !existing) {
+      if (req.file?.filename) await cloudinary.uploader.destroy(req.file.filename).catch(() => {});
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
     // 1. Extract text fields from req.body (Including NEW fields)
     const {
       title,
@@ -31,7 +37,7 @@ exports.createProject = async (req, res) => {
       const error = new Error('Invalid project fields'); error.name = 'ValidationError'; throw error;
     }
     // 2. Critical Check: Ensure the Middleware actually uploaded the image
-    if (!req.file) {
+    if (!req.file && !existing) {
       return res.status(400).json({
         success: false,
         message: "Image upload failed. Please attach a mockup file."
@@ -61,13 +67,12 @@ exports.createProject = async (req, res) => {
       const error = new Error('Invalid project features'); error.name = 'ValidationError'; throw error;
     }
     // 5. Create the project in MongoDB with ALL fields
-    const project = await Project.create({
+    const values = {
       title,
       category,
       description,
       longDescription: longDescription || "",
-      imagePublicId: req.file.filename,
-      image: req.file.path, // Secure Cloudinary URL
+      ...(req.file ? { imagePublicId: req.file.filename, image: req.file.path } : {}),
       link,
       tags: projectTags,
       isFeatured: isFeatured === 'true' || isFeatured === true,
@@ -79,17 +84,22 @@ exports.createProject = async (req, res) => {
       duration: duration || "",
       // -------------------------------------
 
-      createdAt: Date.now()
-    });
+    };
+    const previousImage = existing?.imagePublicId;
+    const project = existing ? await Object.assign(existing, values).save() : await Project.create(values);
+    saved = true;
+    if (req.file && previousImage && previousImage !== req.file.filename) await cloudinary.uploader.destroy(previousImage).catch(() => console.error('Previous project image cleanup failed.'));
+    const data = project.toObject();
+    delete data.imagePublicId;
 
-    res.status(201).json({
+    res.status(existing ? 200 : 201).json({
       success: true,
-      data: project,
+      data,
       message: "Project deployed successfully to Cloudinary & Portfolio."
     });
 
   } catch (error) {
-    if (req.file?.filename) await cloudinary.uploader.destroy(req.file.filename).catch(() => console.error('Unused image cleanup failed.'));
+    if (!saved && req.file?.filename) await cloudinary.uploader.destroy(req.file.filename).catch(() => console.error('Unused image cleanup failed.'));
     console.error('Project creation failed:', error.name);
     res.status(error.name === 'ValidationError' ? 400 : 500).json({
       success: false,

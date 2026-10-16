@@ -24,11 +24,12 @@ router.get('/:id', getProjectById);
 // --- 2. PRIVATE ROUTES (Admin Only) ---
 /**
  * The order is CRITICAL:
- * 1. protect -> Verifies JWT Admin Token.
+ * 1. protect -> Verifies the active database-backed admin session and CSRF token.
  * 2. upload.single('image') -> Processes file to Cloudinary.
  * 3. createProject -> Saves final data to MongoDB.
  */
 router.post('/', protect, upload.single('image'), createProject);
+router.put('/:id', protect, upload.single('image'), createProject);
 
 // Only Bilel can remove a project
 router.delete('/:id', protect, deleteProject);
