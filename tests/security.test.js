@@ -1,13 +1,11 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 process.env.NODE_ENV = 'test';
-process.env.JWT_SECRET = 'test-secret-for-local-tests-only-32-characters';
-process.env.GATE_MASTER_KEY = 'test-gate-key-local-only-32-characters';
+process.env.MFA_ENCRYPTION_KEY = 'a'.repeat(64);
 process.env.CLOUDINARY_CLOUD_NAME = 'local-test';
 process.env.SMTP_HOST = '';
 const { app } = require('../server');
-const { signToken, verifyToken, safeEqual } = require('../config/security');
-const Access = require('../models/Access');
+const { safeEqual, encryptSecret, decryptSecret, newSecret } = require('../config/security');
 const Message = require('../models/Message');
 const Feedback = require('../models/Feedback');
 let server, base;
@@ -22,35 +20,20 @@ const request = (path, body, options = {}) => fetch(base + path, {
   ...(body === undefined ? {} : { body: JSON.stringify(body) }), ...options,
   headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:5173', ...options.headers }
 });
-test('gate rejects the old forgeable cookie', async () => {
-  const response = await request('/api/auth/check-access', { email: 'admin@example.com' }, { headers: { Cookie: 'gate_pass=authorized' } });
-  assert.equal(response.status, 401);
+test('old gate endpoints and cookies do not grant access', async () => {
+  assert.equal((await request('/api/auth/verify-gate', { key: 'old-key' })).status, 403);
+  assert.equal((await request('/api/auth/status', undefined, { headers: { Cookie: 'admin_token=legacy; gate_pass=authorized' } })).status, 401);
 });
-test('gate issues a signed, purpose-scoped expiring cookie', async () => {
-  const response = await request('/api/auth/verify-gate', { key: process.env.GATE_MASTER_KEY });
-  assert.equal(response.status, 200);
-  const header = response.headers.get('set-cookie');
-  assert.match(header, /HttpOnly/);
-  const token = header.match(/gate_pass=([^;]+)/)[1];
-  const claims = verifyToken(token);
-  assert.equal(claims.purpose, 'gate');
-  assert.ok(claims.exp > claims.iat);
-  assert.equal((await request('/api/auth/gate-status', undefined, { headers: { Cookie: `gate_pass=${token}` } })).status, 200);
-});
-test('token tampering and purpose confusion are rejected', async () => {
-  const token = signToken({ purpose: 'gate' }, '1m');
-  assert.throws(() => verifyToken(token + 'tampered'));
-  assert.equal((await request('/api/auth/status', undefined, { headers: { Cookie: `admin_token=${token}` } })).status, 401);
+test('authenticator secrets are encrypted with authenticated encryption', () => {
+  const secret = newSecret();
+  const encrypted = encryptSecret(secret);
+  assert.equal(encrypted.includes(secret), false);
+  assert.equal(decryptSecret(encrypted), secret);
+  const parts = encrypted.split('.');
+  parts[1] = Buffer.alloc(16).toString('base64url');
+  assert.throws(() => decryptSecret(parts.join('.')));
   assert.equal(safeEqual({}, 'key'), false);
   assert.equal(safeEqual('key', 'key'), true);
-});
-test('revoked admin sessions cannot access protected data', async () => {
-  const original = Access.findById;
-  Access.findById = () => ({ select: async () => ({ _id: 'abc', sessionVersion: 2 }) });
-  try {
-    const token = signToken({ purpose: 'admin', id: 'abc', version: 1 }, '1m');
-    assert.equal((await request('/api/messages', undefined, { headers: { Cookie: `admin_token=${token}` } })).status, 401);
-  } finally { Access.findById = original; }
 });
 test('untrusted browser origins cannot mutate data', async () => {
   const response = await request('/api/messages', {}, { headers: { Origin: 'https://untrusted.example' } });

@@ -10,7 +10,7 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', Number(process.env.TRUST_PROXY || 0));
 app.use(helmet());
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,https://bilelthedev.vercel.app,https://bilel.dev').split(',').map(s => s.trim()).filter(Boolean);
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,https://bilelthedev.website,https://www.bilelthedev.website,https://bilel-portfolio-frontend.vercel.app').split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)), credentials: true, methods: ['GET', 'POST', 'DELETE', 'PATCH', 'OPTIONS'] }));
 // Cross-site cookies require explicit origin checks for every browser mutation.
 app.use((req, res, next) => {
@@ -41,8 +41,9 @@ app.use((err, req, res, next) => {
   res.status(status).json({ success: false, message: status === 413 ? 'The image must be smaller than 5 MB.' : status < 500 ? 'Please check your request.' : 'Something went wrong. Please try again later.' });
 });
 async function start() {
-  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || !process.env.GATE_MASTER_KEY || process.env.GATE_MASTER_KEY.length < 24) throw new Error('Configure a JWT_SECRET of at least 32 characters and GATE_MASTER_KEY of at least 24 characters.');
+  require('./config/security').key();
   await connectDB();
+  await Promise.all([require('./models/Access').init(), require('./models/AdminSession').init(), require('./models/AuthChallenge').init(), require('./models/SecurityEvent').init()]);
   const stopNotifications = require('./services/notifications').startNotifications();
   const server = app.listen(process.env.PORT || 5000, () => console.log('Portfolio API ready.'));
   const shutdown = () => { stopNotifications(); server.close(async () => { await mongoose.disconnect(); process.exit(0); }); };

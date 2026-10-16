@@ -14,7 +14,7 @@ function startNotifications() {
       const message = await Message.findOneAndUpdate({ notificationAttempts: { $lt: 5 }, $or: [
         { notificationStatus: 'pending', notificationNextAt: { $lte: now } },
         { notificationStatus: 'sending', notificationLeaseAt: { $lt: new Date(Date.now() - 5 * 60000) } }
-      ] }, { $set: { notificationStatus: 'sending', notificationLeaseAt: now }, $inc: { notificationAttempts: 1 } }, { new: true, sort: { createdAt: 1 } });
+      ] }, { $set: { notificationStatus: 'sending', notificationLeaseAt: now }, $inc: { notificationAttempts: 1 } }, { returnDocument: 'after', sort: { createdAt: 1 } });
       if (!message) return;
       try {
         await transport.sendMail({ from: process.env.SMTP_FROM, to: process.env.RECEIVER_EMAIL, replyTo: message.email,
