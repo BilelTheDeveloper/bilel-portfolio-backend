@@ -29,6 +29,7 @@ app.use('/api/auth', (req, res, next) => ['POST'].includes(req.method) && req.pa
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/feedback', require('./routes/feedbackRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
+app.use('/api/social-links', require('./routes/socialRoutes'));
 app.get('/health', (req, res) => {
   const connected = mongoose.connection.readyState === 1;
   res.status(connected ? 200 : 503).json({ status: connected ? 'healthy' : 'unavailable', database: connected ? 'connected' : 'disconnected' });

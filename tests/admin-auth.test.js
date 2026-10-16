@@ -341,3 +341,19 @@ test('structured inquiries persist without email and admin status updates stay p
     assert.equal((await patch(headers,'invalid')).status,400);
   }finally{await Message.deleteMany({idempotencyKey:key});}
 });
+
+test('social links are database managed, public to read and protected to edit',async()=>{
+  const Settings=require('../models/SocialSettings');
+  await Settings.deleteMany({});
+  const read=await(await fetch(base+'/api/social-links')).json();assert.equal(read.data.instagram,'');assert.equal(read.data.github,'https://github.com/BilelTheDeveloper');
+  const values={github:'https://github.com/example',linkedin:'https://www.linkedin.com/in/example/',instagram:'https://www.instagram.com/example/',email:'hello@example.com'};
+  const save=(headers,body=values)=>fetch(base+'/api/social-links',{method:'PATCH',headers:{Origin:'http://localhost:5173','Content-Type':'application/json',...headers},body:JSON.stringify(body)});
+  try{
+    assert.equal((await save({})).status,401);
+    const {browser}=await enroll();const status=await browser.send('/status');const headers={Cookie:[...browser.cookies].map(([k,v])=>k+'='+v).join('; '),'X-Admin-CSRF':status.data.csrfToken};
+    assert.equal((await save({Cookie:headers.Cookie})).status,403);
+    for(const invalid of ['javascript:alert(1)','https://instagram.com.evil.example/user','https://user:pass@instagram.com/name/','http://instagram.com/name/'])assert.equal((await save(headers,{...values,instagram:invalid})).status,400);
+    assert.equal((await save(headers)).status,200);const saved=await(await fetch(base+'/api/social-links')).json();assert.deepEqual(saved.data,values);assert.equal((await Settings.findById('social')).email,values.email);
+    assert.equal((await save(headers,{...values,instagram:''})).status,200);assert.equal((await(await fetch(base+'/api/social-links')).json()).data.instagram,'');
+  }finally{await Settings.deleteMany({});}
+});
