@@ -1,142 +1,54 @@
 const express = require('express');
-const dotenv = require('dotenv');
+require('dotenv').config();
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
-const https = require('https');
-const http = require('http');
+const helmet = require('helmet');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
-
-// --- 1. Load Environment Variables ---
-dotenv.config();
-
-// --- 2. Connect to MongoDB ---
-connectDB();
-
+const { authLimiter } = require('./middleware/rateLimits');
 const app = express();
-
-// --- 3. Global Middleware ---
-app.use(express.json({ limit: '10mb' }));
-app.use(cookieParser());
-
-/**
- * CORS CONFIGURATION
- */
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://bilelthedev.vercel.app",
-  "https://bilel.dev"
-];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log(`⚠️ Blocked by CORS: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+app.disable('x-powered-by');
+app.set('trust proxy', Number(process.env.TRUST_PROXY || 0));
+app.use(helmet());
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,https://bilelthedev.vercel.app,https://bilel.dev').split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)), credentials: true, methods: ['GET', 'POST', 'DELETE', 'PATCH', 'OPTIONS'] }));
+// Cross-site cookies require explicit origin checks for every browser mutation.
+app.use((req, res, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    const origin = req.get('origin');
+    if ((origin && !allowedOrigins.includes(origin)) || (req.get('sec-fetch-site') && !origin)) {
+      return res.status(403).json({ success: false, message: 'Request origin is not allowed.' });
     }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-// Request Logger (Dev only)
-if (process.env.NODE_ENV === 'development') {
-  app.use((req, res, next) => {
-    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
-    next();
-  });
-}
-
-// --- 4. API Routes ---
+  }
+  next();
+});
+app.use(express.json({ limit: '32kb' }));
+app.use(cookieParser());
+app.use('/api/auth', (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+app.use('/api/auth', (req, res, next) => ['POST'].includes(req.method) && req.path !== '/logout' ? authLimiter(req, res, next) : next(), require('./routes/authRoutes'));
 app.use('/api/projects', require('./routes/projectRoutes'));
-app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/feedback', require('./routes/feedbackRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
-
-// --- 5. Health Check & Error Handling ---
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'Active',
-    timestamp: new Date(),
-    service: 'Bilel.dev Portfolio API',
-    database: 'Connected',
-    environment: process.env.NODE_ENV || 'development'
-  });
+  const connected = mongoose.connection.readyState === 1;
+  res.status(connected ? 200 : 503).json({ status: connected ? 'healthy' : 'unavailable', database: connected ? 'connected' : 'disconnected' });
 });
-
-// 404 Handler
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: "API endpoint not found" });
+app.use((req, res) => res.status(404).json({ success: false, message: 'API endpoint not found.' }));
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : err.status || (['ValidationError', 'CastError', 'MulterError'].includes(err.name) ? 400 : 500);
+  console.error('Request failed:', err.name || 'Error');
+  res.status(status).json({ success: false, message: status === 413 ? 'The image must be smaller than 5 MB.' : status < 500 ? 'Please check your request.' : 'Something went wrong. Please try again later.' });
 });
-
-// --- 6. Start Server ---
-const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
-  console.log(`
-  🚀 SERVER STATUS: ACTIVE
-  🌍 ENVIRONMENT: ${process.env.NODE_ENV || 'development'}
-  📡 PORT: ${PORT}
-  🔗 API BASE: http://localhost:${PORT}/api
-  🔓 ACTIVE ORIGINS: ${allowedOrigins.join(', ')}
-  `);
-
-  // Start keep-alive pinger after server is ready
-  startKeepAlive();
-});
-
-// --- 7. KEEP-ALIVE PINGER ---
-// Render free plan shuts down after ~15 minutes of inactivity.
-// This pings our own /health endpoint every 10 minutes to keep it awake.
-function startKeepAlive() {
-  // Only run in production (no need to ping in local dev)
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('  ⏸️  Keep-alive disabled in development mode.');
-    return;
-  }
-
-  // Get the server URL from env, fallback to a constructed one
-  const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-  const PING_INTERVAL_MS = 10 * 60 * 1000; // every 10 minutes
-
-  const ping = () => {
-    const url = `${SELF_URL}/health`;
-    const lib = url.startsWith('https') ? https : http;
-
-    const req = lib.get(url, (res) => {
-      if (res.statusCode === 200) {
-        console.log(`  💓 Keep-alive ping OK — [${new Date().toLocaleTimeString()}]`);
-      } else {
-        console.warn(`  ⚠️  Keep-alive ping got status ${res.statusCode}`);
-      }
-      // Drain the response to free memory
-      res.resume();
-    });
-
-    req.on('error', (err) => {
-      console.warn(`  ⚠️  Keep-alive ping failed: ${err.message}`);
-    });
-
-    // Safety timeout so the request never hangs
-    req.setTimeout(10000, () => {
-      req.destroy();
-      console.warn('  ⚠️  Keep-alive ping timed out.');
-    });
-  };
-
-  // First ping after 1 minute (let server fully stabilise first)
-  setTimeout(() => {
-    ping();
-    // Then ping every 10 minutes
-    setInterval(ping, PING_INTERVAL_MS);
-  }, 60 * 1000);
-
-  console.log(`  💓 Keep-alive active — pinging ${SELF_URL}/health every 10 min`);
+async function start() {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || !process.env.GATE_MASTER_KEY || process.env.GATE_MASTER_KEY.length < 24) throw new Error('Configure a JWT_SECRET of at least 32 characters and GATE_MASTER_KEY of at least 24 characters.');
+  await connectDB();
+  const stopNotifications = require('./services/notifications').startNotifications();
+  const server = app.listen(process.env.PORT || 5000, () => console.log('Portfolio API ready.'));
+  const shutdown = () => { stopNotifications(); server.close(async () => { await mongoose.disconnect(); process.exit(0); }); };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+  return server;
 }
-
-// --- 8. Handle Unhandled Promise Rejections ---
-process.on('unhandledRejection', (err) => {
-  console.log(`❌ Critical Error: ${err.message}`);
-  server.close(() => process.exit(1));
-});
+if (require.main === module) start().catch(err => { console.error(err.message); process.exit(1); });
+module.exports = { app, start };

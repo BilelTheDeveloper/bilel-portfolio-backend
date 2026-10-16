@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const { validateSubmission, validId } = require('../middleware/validation');
+const { submissionLimiter } = require('../middleware/rateLimits');
+router.param('id', (req, res, next, id) => { req.params.id = id; validId(req, res, next); });
 
 // --- Controller Imports ---
-const { 
-  sendMessage, 
-  getMessages, 
-  deleteMessage 
+const {
+  sendMessage,
+  getMessages,
+  deleteMessage
 } = require('../controllers/messageController');
 
 // --- Middleware Imports ---
@@ -17,7 +20,7 @@ const { protect } = require('../middleware/authMiddleware');
  * @desc    Public route to send a message from the contact form
  * @access  Public
  */
-router.post('/', sendMessage);
+router.post('/', submissionLimiter, validateSubmission('message'), sendMessage);
 
 /**
  * @route   GET /api/messages

@@ -1,172 +1,37 @@
-const jwt = require('jsonwebtoken');
 const Access = require('../models/Access');
-
-// @desc    Check if email has permission to access login
-// @route   POST /api/auth/check-access
+const { cookieOptions, signToken, verifyToken, safeEqual } = require('../config/security');
+const emailValue = (value) => typeof value === 'string' ? value.trim().toLowerCase() : '';
 exports.checkAccess = async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ success: false, message: "Email is required" });
-    }
-
-    // Find the admin in the Access table
-    const admin = await Access.findOne({ email: email.toLowerCase() });
-
-    if (!admin) {
-      return res.status(403).json({ 
-        success: false, 
-        message: "Unauthorized: You do not have permission to access this area." 
-      });
-    }
-
-    res.status(200).json({ 
-      success: true, 
-      message: "Access granted. Please proceed to login." 
-    });
-  } catch (error) {
-    console.error("Access Check Error:", error);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
+  if (!emailValue(req.body.email)) return res.status(400).json({ success: false, message: 'Enter your email address.' });
+  // Do not disclose whether an account exists.
+  res.json({ success: true, message: 'Continue with your password.' });
 };
-
-// @desc    Login Admin & Set Cookie
-// @route   POST /api/auth/login
 exports.login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    // 1. Find the admin in the Access table
-    const admin = await Access.findOne({ email });
-    
-    // 2. Check credentials
-    if (!admin || !(await admin.comparePassword(password))) {
-      return res.status(401).json({ 
-        success: false, 
-        message: "Invalid Admin Credentials" 
-      });
-    }
-
-    // 3. Create Token
-    const token = jwt.sign(
-      { id: admin._id, email: admin.email }, 
-      process.env.JWT_SECRET, 
-      { expiresIn: '24h' }
-    );
-
-    // 4. PRODUCTION-READY COOKIE OPTIONS
-    const cookieOptions = {
-      expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-      httpOnly: true,
-      secure: true,      // Must be true for HTTPS/Live sites
-      sameSite: 'none',  // Must be 'none' for cross-domain cookies
-      path: '/'          
-    };
-
-    /**
-     * 🛡️ UPDATE: Clear the gate_pass cookie upon successful login
-     * Since the user is now fully authenticated, they no longer need the gate pass.
-     */
-    res.status(200)
-      .cookie('admin_token', token, cookieOptions)
-      .cookie('gate_pass', '', { ...cookieOptions, expires: new Date(0) }) 
-      .json({
-        success: true,
-        message: "Welcome back, Bilel.",
-        user: {
-          email: admin.email
-        }
-      });
-  } catch (error) {
-    console.error("Login Error:", error);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
+  const email = emailValue(req.body.email);
+  const password = req.body.password;
+  if (!email || typeof password !== 'string' || password.length > 256) return res.status(400).json({ success: false, message: 'Enter valid credentials.' });
+  const admin = await Access.findOne({ email });
+  if (!admin || !(await admin.comparePassword(password))) return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+  const token = signToken({ id: String(admin._id), purpose: 'admin', version: admin.sessionVersion || 0 }, '8h');
+  res.cookie('admin_token', token, { ...cookieOptions(), maxAge: 8 * 60 * 60 * 1000 })
+    .clearCookie('gate_pass', cookieOptions()).json({ success: true, user: { email: admin.email } });
 };
-
-// @desc    Check Auth Status (Used by ProtectedRoute.jsx)
-// @route   GET /api/auth/status
 exports.getStatus = async (req, res) => {
-  try {
-    const admin = await Access.findById(req.user.id).select('-password');
-
-    if (!admin) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    res.status(200).json({ 
-      success: true, 
-      isAdmin: true,
-      user: {
-        email: admin.email
-      }
-    });
-  } catch (error) {
-    console.error("Status Error:", error);
-    res.status(500).json({ success: false, message: "Status Check Failed" });
-  }
+  const admin = await Access.findById(req.user.id).select('email');
+  res.set('Cache-Control', 'no-store').json({ success: true, isAdmin: true, user: { email: admin.email } });
 };
-
-// @desc    Logout Admin & Clear Cookie
-// @route   GET /api/auth/logout
 exports.logout = async (req, res) => {
-  const clearOptions = {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'none',
-    expires: new Date(0),
-    path: '/'
-  };
-
-  res.cookie('admin_token', '', clearOptions)
-     .cookie('gate_pass', '', clearOptions)
-     .status(200)
-     .json({ success: true, message: "Logged out successfully" });
+  // Invalidate every existing token for this administrator, including copied tokens.
+  await Access.findByIdAndUpdate(req.user.id, { $inc: { sessionVersion: 1 } });
+  res.clearCookie('admin_token', cookieOptions()).clearCookie('gate_pass', cookieOptions()).json({ success: true });
 };
-
-// --- 🛡️ GATE KEEPER FUNCTIONS ---
-
-/**
- * @desc    Verify the Secret Gate Key & Set a temporary "Gate Cookie"
- * @route   POST /api/auth/verify-gate
- */
 exports.verifyGate = async (req, res) => {
-  try {
-    const { key } = req.body;
-    const MASTER_KEY = process.env.GATE_MASTER_KEY; 
-
-    if (!key || key !== MASTER_KEY) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-
-    const gateCookieOptions = {
-      expires: new Date(Date.now() + 30 * 60 * 1000), // Valid for 30 minutes
-      httpOnly: true, // 🔒 Cannot be seen by JavaScript/Console
-      secure: true,   
-      sameSite: 'none',
-      path: '/'
-    };
-
-    res.status(200).cookie('gate_pass', 'authorized', gateCookieOptions).json({
-      success: true,
-      message: "Gate Opened."
-    });
-
-  } catch (error) {
-    console.error("Gate Error:", error);
-    res.status(500).json({ success: false, message: "Server Error" });
-  }
+  if (!process.env.GATE_MASTER_KEY || !safeEqual(req.body.key, process.env.GATE_MASTER_KEY)) return res.status(401).json({ success: false, message: 'Invalid gate key.' });
+  res.cookie('gate_pass', signToken({ purpose: 'gate' }, '15m'), { ...cookieOptions(), maxAge: 15 * 60 * 1000 }).json({ success: true });
 };
-
-/**
- * @desc    Check if the browser has the valid Gate Cookie (For Frontend UI)
- * @route   GET /api/auth/gate-status
- */
-exports.getGateStatus = async (req, res) => {
-  // Check if the 'gate_pass' cookie exists and is correct
-  if (req.cookies && req.cookies.gate_pass === 'authorized') {
-    return res.status(200).json({ success: true });
-  }
-
-  res.status(401).json({ success: false, message: "Gate Locked" });
+exports.getGateStatus = (req, res) => {
+  try {
+    if (verifyToken(req.cookies?.gate_pass).purpose !== 'gate') throw new Error('Invalid purpose');
+    res.set('Cache-Control', 'no-store').json({ success: true });
+  } catch { res.status(401).json({ success: false, message: 'Gate locked.' }); }
 };

@@ -28,7 +28,7 @@ exports.submitFeedback = async (req, res) => {
 // @route   GET /api/feedback
 exports.getApprovedFeedback = async (req, res) => {
   try {
-    const feedbacks = await Feedback.find({ isApproved: true }).sort('-createdAt');
+    const feedbacks = await Feedback.find({ isApproved: true }).select('name role message rating createdAt').sort('-createdAt');
     res.status(200).json({ success: true, count: feedbacks.length, data: feedbacks });
   } catch (error) {
     res.status(500).json({ success: false, message: "Server Error" });
@@ -50,11 +50,13 @@ exports.getAllFeedbackAdmin = async (req, res) => {
 // @route   PATCH /api/feedback/:id
 exports.updateFeedbackStatus = async (req, res) => {
   try {
+    if (typeof req.body.isApproved !== 'boolean') return res.status(400).json({ success: false, message: 'Approval must be true or false.' });
     const feedback = await Feedback.findByIdAndUpdate(
-      req.params.id, 
-      { isApproved: req.body.isApproved }, 
+      req.params.id,
+      { isApproved: req.body.isApproved },
       { new: true }
     );
+    if (!feedback) return res.status(404).json({ success: false, message: 'Review not found.' });
     res.status(200).json({ success: true, data: feedback });
   } catch (error) {
     res.status(400).json({ success: false, message: "Update failed" });
@@ -65,7 +67,8 @@ exports.updateFeedbackStatus = async (req, res) => {
 // @route   DELETE /api/feedback/:id
 exports.deleteFeedback = async (req, res) => {
   try {
-    await Feedback.findByIdAndDelete(req.params.id);
+    const deleted = await Feedback.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ success: false, message: 'Review not found.' });
     res.status(200).json({ success: true, message: "Feedback deleted" });
   } catch (error) {
     res.status(400).json({ success: false, message: "Delete failed" });

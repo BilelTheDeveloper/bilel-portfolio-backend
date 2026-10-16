@@ -10,6 +10,7 @@ const AccessSchema = new mongoose.Schema({
     trim: true,
     default: "bilel.thedeveloper@gmail.com"
   },
+  sessionVersion: { type: Number, default: 0 },
   password: {
     type: String,
     required: true,
@@ -19,7 +20,7 @@ const AccessSchema = new mongoose.Schema({
 // --- FIX: Modern Async Pre-save ---
 AccessSchema.pre('save', async function () {
   if (!this.isModified('password')) return;
-  
+
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
 });

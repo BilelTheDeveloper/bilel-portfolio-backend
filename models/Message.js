@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
+  idempotencyKey: { type: String, unique: true, sparse: true },
+  notificationStatus: { type: String, enum: ['pending', 'sending', 'sent', 'failed'], default: 'pending' },
+  notificationAttempts: { type: Number, default: 0 },
+  notificationNextAt: { type: Date, default: Date.now },
+  notificationLeaseAt: Date,
   name: {
     type: String,
     required: [true, 'Please add a name'],
@@ -10,7 +15,7 @@ const messageSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please add an email'],
     match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
       'Please add a valid email'
     ]
   },
@@ -20,7 +25,7 @@ const messageSchema = new mongoose.Schema({
   },
   message: {
     type: String,
-    required: [true, 'Please add a message']
+    required: [true, 'Please add a message'], maxlength: 5000
   },
   createdAt: {
     type: Date,

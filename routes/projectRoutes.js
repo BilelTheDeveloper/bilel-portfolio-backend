@@ -1,13 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const { validId } = require('../middleware/validation');
+router.param('id', (req, res, next, id) => { req.params.id = id; validId(req, res, next); });
 const { protect } = require('../middleware/authMiddleware');
 const upload = require('../middleware/multer'); // Cloudinary/Multer Middleware
 
-const { 
-  createProject, 
-  getProjects, 
+const {
+  createProject,
+  getProjects,
   getProjectById, // NEW: Added for individual case study pages
-  deleteProject 
+  deleteProject
 } = require('../controllers/projectController');
 
 // --- 1. PUBLIC ROUTES ---

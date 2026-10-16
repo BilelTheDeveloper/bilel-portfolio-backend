@@ -15,7 +15,7 @@ const feedbackSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please provide your email'],
     match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
       'Please provide a valid email address'
     ]
   },
@@ -33,7 +33,7 @@ const feedbackSchema = new mongoose.Schema({
   // We keep this hidden from the public, but visible in your Admin Dashboard
   isApproved: {
     type: Boolean,
-    default: false 
+    default: false
   },
   createdAt: {
     type: Date,

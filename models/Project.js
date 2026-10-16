@@ -21,7 +21,7 @@ const ProjectSchema = new mongoose.Schema({
     type: String,
     default: '' // Used for the "Learn More" modal detail
   },
-  
+
   // --- 🚀 NEW DETAILED FIELDS ---
   features: {
     type: [String], // Array for bullet points like ["Real-time Chat", "Secure Auth"]
@@ -41,6 +41,7 @@ const ProjectSchema = new mongoose.Schema({
   },
   // ------------------------------
 
+  imagePublicId: { type: String, select: false },
   image: {
     type: String, // Store the Cloudinary URL here
     required: [true, 'Please upload an image mockup']
@@ -48,7 +49,7 @@ const ProjectSchema = new mongoose.Schema({
   link: {
     type: String,
     match: [
-      /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i,
+      /^(https?):\/\/[^\s/$.?#].[^\s]*$/i,
       'Please use a valid URL with HTTP or HTTPS'
     ]
   },
