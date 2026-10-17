@@ -266,7 +266,7 @@ test('project editing requires a verified session and CSRF and preserves protect
   const project = await Project.create({ title: 'Original case study', category: 'Web Development', description: 'Original', image: 'https://example.com/cover.png', imagePublicId: 'private-cover-id', link: 'https://example.com' });
   try {
     const url = base + '/api/projects/' + project._id;
-    const fields = { title: 'Updated case study', category: 'UI/UX Design', description: 'New description', link: 'https://example.com/new', features: JSON.stringify(['Accessible navigation']), tags: 'React, Design', isFeatured: 'true', image: 'https://evil.example/cover.png', imagePublicId: 'attacker-id', createdAt: '2000-01-01' };
+    const fields = { title: 'Updated case study', category: 'UI/UX Design', description: 'New description', projectType: 'Client project', role: 'Full-stack developer', decisions: 'Chose a staged release to fit the scope.', outcomes: 'Users can complete a booking.', lessons: 'Validate the workflow early.', walkthroughUrl: 'https://example.com/video', walkthroughNotes: 'A guided booking journey.', repositoryUrl: 'https://example.com/source', demoUrl: 'https://example.com/demo', demoGuide: 'Open the sample dashboard', designImageUrl: 'https://example.com/flow.png', designCaption: 'Booking flow', gallery: 'https://example.com/screen.png | Booking screen', testimonialQuote: 'Clear and helpful updates.', testimonialAuthor: 'Approved client attribution', testimonialApproved: true, link: 'https://example.com/new', features: JSON.stringify(['Accessible navigation']), tags: 'React, Design', isFeatured: 'true', image: 'https://evil.example/cover.png', imagePublicId: 'attacker-id', createdAt: '2000-01-01' };
     const send = headers => fetch(url, { method: 'PUT', headers: { Origin: 'http://localhost:5173', 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(fields) });
     assert.equal((await send({})).status, 401);
     const { browser } = await enroll();
@@ -278,6 +278,10 @@ test('project editing requires a verified session and CSRF and preserves protect
     assert.equal(response.status, 200);
     const result = (await response.json()).data;
     assert.equal(result.title, fields.title);
+    for (const name of ['projectType','role','decisions','outcomes','lessons','walkthroughUrl','walkthroughNotes','repositoryUrl','demoUrl','demoGuide','designImageUrl','designCaption','gallery','testimonialQuote','testimonialAuthor','testimonialApproved']) assert.equal(result[name], fields[name], name);
+    const publicProject = await (await fetch(url)).json();
+    assert.equal(publicProject.data.role, fields.role);
+    assert.equal(publicProject.data.gallery, fields.gallery);
     assert.equal(result.image, project.image);
     assert.equal(result.imagePublicId, undefined);
     assert.equal(result.isFeatured, true);

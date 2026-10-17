@@ -18,6 +18,8 @@ const ProjectSchema = new mongoose.Schema({
   link: { type: String, default: '', validate: { validator: value => { if (!value) return true; try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && Boolean(url.hostname) && !url.username && !url.password; } catch { return false; } }, message: 'Use a complete HTTP or HTTPS URL.' } },
   tags: { type: [String], default: [], validate: limitedList(12, 30) },
   isFeatured: { type: Boolean, default: false },
+  ...Object.fromEntries(Object.entries({projectType:40,role:150,decisions:5000,outcomes:3000,lessons:3000,walkthroughUrl:2048,walkthroughNotes:2000,repositoryUrl:2048,demoUrl:2048,demoGuide:3000,designImageUrl:2048,designCaption:500,gallery:6000,testimonialQuote:2000,testimonialAuthor:150}).map(([name,maxlength]) => [name,{type:String,trim:true,maxlength,default:''}])),
+  testimonialApproved: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 }, { timestamps: { createdAt: false, updatedAt: true } });
 module.exports = mongoose.model('Project', ProjectSchema);

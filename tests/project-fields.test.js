@@ -6,3 +6,9 @@ test('project validation rejects invalid arrays, flags, URLs and crops',()=>{
   for(const fields of [{isFeatured:'yes'},{features:'not-json'},{features:JSON.stringify(['x'.repeat(201)])},{tags:Array(13).fill('React')},{imagePosition:'left'},{link:'https://user:pass@example.com'},{title:{$ne:null}}])assert.ok(Object.keys(projectFields({...base,...fields}).errors).length);
 });
 test('optional fields support old projects and projects without a live site',()=>{const result=projectFields(base);assert.deepEqual(result.errors,{});assert.equal(result.values.link,'');assert.equal(result.values.cardLabel,'');assert.equal(result.values.imagePosition,'center');assert.deepEqual(result.values.features,[]);});
+
+test('case study details validate links, project type, screenshots and approved feedback',()=>{
+  const valid={...base,projectType:'Client project',role:'Full-stack developer',repositoryUrl:'https://github.com/example/project',gallery:'https://example.com/screen.png | Booking screen',testimonialQuote:'Clear communication.',testimonialAuthor:'Approved anonymous client',testimonialApproved:'true'};
+  assert.deepEqual(projectFields(valid).errors,{});
+  for(const fields of [{projectType:'Made up'},{demoUrl:'javascript:alert(1)'},{repositoryUrl:'https://user:pass@example.com'},{walkthroughUrl:'not a URL'},{gallery:'https://example.com/image.png'},{gallery:Array(7).fill('https://example.com/image.png | Screen').join('\n')},{testimonialQuote:'Unapproved quote'},{testimonialQuote:'Quote',testimonialApproved:'true'}])assert.ok(Object.keys(projectFields({...base,...fields}).errors).length);
+});
