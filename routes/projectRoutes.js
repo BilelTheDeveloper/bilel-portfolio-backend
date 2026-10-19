@@ -31,9 +31,13 @@ router.get('/:id', getProjectById);
 const coverUpload = (req, res, next) => upload.single('image')(req, res, error => {
   if (!error) return next();
   const tooLarge = error.code === 'LIMIT_FILE_SIZE';
-  const invalid = error.code === 'INVALID_IMAGE' || error.name === 'MulterError';
-  const message = tooLarge ? 'Choose an image smaller than 5 MB.' : invalid ? 'Choose one JPG, PNG or WebP image up to 5 MB.' : 'Image upload failed. Please try again.';
-  return res.status(tooLarge ? 413 : invalid ? 400 : 502).json({ success: false, message, errors: { image: message } });
+  const formLimit = ['LIMIT_FIELD_COUNT', 'LIMIT_PART_COUNT', 'LIMIT_FIELD_VALUE', 'LIMIT_FIELD_KEY'].includes(error.code);
+  const invalidImage = error.code === 'INVALID_IMAGE' || ['LIMIT_FILE_COUNT', 'LIMIT_UNEXPECTED_FILE'].includes(error.code);
+  const message = tooLarge ? 'Choose an image smaller than 5 MB.'
+    : formLimit ? 'The project form exceeds the allowed number or size of fields. Please refresh and try again.'
+    : invalidImage ? 'Choose one JPG, PNG or WebP image up to 5 MB.'
+    : 'Image upload failed. Please try again.';
+  return res.status(tooLarge ? 413 : formLimit || invalidImage ? 400 : 502).json({ success: false, message, ...(!formLimit ? { errors: { image: message } } : {}) });
 });
 router.post('/', protect, coverUpload, createProject);
 router.put('/:id', protect, coverUpload, createProject);
